@@ -45,6 +45,20 @@
             font-size: 14px;
         }
         
+        .card-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            display: none;
+        }
+        
+        .card-info.active {
+            display: block;
+        }
+        
         .upload-area {
             padding: 40px;
             text-align: center;
@@ -101,6 +115,14 @@
             transform: translateY(0);
         }
         
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        }
+        
         .btn-secondary {
             background: #6c757d;
         }
@@ -129,6 +151,18 @@
             gap: 10px;
             flex-wrap: wrap;
             align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .separator {
+            width: 100%;
+            height: 1px;
+            background: #dee2e6;
+            margin: 10px 0;
         }
         
         .table-container {
@@ -155,11 +189,11 @@
         }
         
         th, td {
-            padding: 6px 10px;
+            padding: 4px 8px;
             text-align: left;
             border: 1px solid #dee2e6;
             white-space: nowrap;
-            font-size: 13px;
+            font-size: 12px;
         }
         
         th {
@@ -174,7 +208,7 @@
         th.row-number {
             background: #495057;
             text-align: center;
-            min-width: 50px;
+            min-width: 40px;
         }
         
         td.row-number {
@@ -201,17 +235,17 @@
         
         .column-controls {
             display: flex;
-            gap: 5px;
+            gap: 3px;
         }
         
         .col-btn {
             background: rgba(255,255,255,0.2);
             border: none;
             color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 1px 4px;
+            border-radius: 2px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             transition: background 0.2s;
             line-height: 1;
         }
@@ -252,6 +286,7 @@
         <div class="header">
             <h1>📊 CSV 데이터 편집 도구</h1>
             <p>CSV 파일을 업로드하여 데이터를 확인하고 열을 자유롭게 편집하세요</p>
+            <div class="card-info" id="cardInfo"></div>
         </div>
         
         <div class="upload-area">
@@ -264,6 +299,11 @@
         </div>
         
         <div class="controls" id="controls">
+            <div class="control-group">
+                <button class="btn btn-primary" id="creditCardBtn">💳 신용카드매입자료</button>
+                <button class="btn btn-info" id="generalSlipBtn">📄 일반전표전송</button>
+            </div>
+            <div class="separator"></div>
             <div class="control-group">
                 <input type="text" id="newColumnName" placeholder="새 열 이름">
                 <button class="btn btn-success" id="addColumnBtn">➕ 열 추가</button>
@@ -283,6 +323,7 @@
     <script>
         let csvData = [];
         let headers = [];
+        let detectedCard = '';
         
         const fileInput = document.getElementById('fileInput');
         const uploadBox = document.getElementById('uploadBox');
@@ -291,6 +332,23 @@
         const stats = document.getElementById('stats');
         const addColumnBtn = document.getElementById('addColumnBtn');
         const downloadBtn = document.getElementById('downloadBtn');
+        const cardInfo = document.getElementById('cardInfo');
+        const creditCardBtn = document.getElementById('creditCardBtn');
+        const generalSlipBtn = document.getElementById('generalSlipBtn');
+        
+        // 카드사 판별 규칙
+        const cardPatterns = {
+            '삼성카드': ['상품', '매출', '성명', '카드구분', '카드번호', '이용일', '이용금액(원)', '부가세(원)', '가맹점명', '승인번호', '가맹점번호', '사업자번호', '업종'],
+            '신한카드': ['이용일', '최초결제일', '이용카드', '이용가맹점', '이용금액', '상품', '사업자번호'],
+            '현대카드': ['결제일', '이용일', '이용금액', '가맹점', '승인번호'],
+            'KB국민카드': ['승인일시', '이용금액', '가맹점명', '승인번호', '카드종류'],
+            '롯데카드': ['사용일', '사용시간', '가맹점명', '사용금액', '승인번호'],
+            '하나카드': ['거래일시', '카드명', '가맹점', '이용금액', '승인번호'],
+            '우리카드': ['사용일자', '사용시간', '가맹점명', '승인금액', '승인번호'],
+            'NH농협카드': ['이용일자', '가맹점명', '이용금액', '승인번호'],
+            'IBK기업은행카드': ['거래일자', '가맹점명', '이용금액', '승인번호'],
+            'BC카드': ['사용일', '가맹점', '금액', '승인번호']
+        };
         
         uploadBox.addEventListener('click', function() {
             fileInput.click();
@@ -323,6 +381,8 @@
         
         addColumnBtn.addEventListener('click', addColumn);
         downloadBtn.addEventListener('click', downloadCSV);
+        creditCardBtn.addEventListener('click', processCreditCard);
+        generalSlipBtn.addEventListener('click', processGeneralSlip);
         
         function handleFile(file) {
             Papa.parse(file, {
@@ -333,6 +393,10 @@
                     if (results.data.length > 0) {
                         headers = results.meta.fields;
                         csvData = results.data;
+                        
+                        // 카드사 판별
+                        detectCardType();
+                        
                         renderTable();
                         controls.classList.add('active');
                         tableContainer.classList.add('active');
@@ -344,6 +408,46 @@
                     alert('CSV 파일 읽기 오류: ' + error.message);
                 }
             });
+        }
+        
+        function detectCardType() {
+            let maxMatch = 0;
+            let detectedCardName = '알 수 없는 카드';
+            
+            // 각 카드사 패턴과 헤더 비교
+            for (const cardName in cardPatterns) {
+                const pattern = cardPatterns[cardName];
+                let matchCount = 0;
+                
+                // 패턴의 키워드가 헤더에 포함되어 있는지 확인
+                for (const keyword of pattern) {
+                    for (const header of headers) {
+                        if (header.includes(keyword) || keyword.includes(header)) {
+                            matchCount++;
+                            break;
+                        }
+                    }
+                }
+                
+                // 가장 많이 일치하는 카드사 찾기
+                if (matchCount > maxMatch) {
+                    maxMatch = matchCount;
+                    detectedCardName = cardName;
+                }
+            }
+            
+            // 매치 정도에 따라 판별
+            if (maxMatch >= 3) {
+                detectedCard = detectedCardName;
+                cardInfo.textContent = '🏦 감지된 카드: ' + detectedCardName;
+                cardInfo.classList.add('active');
+            } else {
+                detectedCard = '알 수 없음';
+                cardInfo.textContent = '🏦 감지된 카드: 알 수 없는 형식';
+                cardInfo.classList.add('active');
+            }
+            
+            console.log('Detected card:', detectedCard, 'Match count:', maxMatch);
         }
         
         function renderTable() {
@@ -499,6 +603,152 @@
         function updateStats() {
             stats.innerHTML = '<strong>통계:</strong> 총 ' + csvData.length + '개 행 | ' + 
                             headers.length + '개 열 | 열 이름: ' + headers.join(', ');
+        }
+        
+        function processCreditCard() {
+            // 신용카드매입자료 헤더
+            headers = [
+                '년도월일   (숫자8)',
+                '구 분  (숫자1)',
+                '코드',
+                '계정과목',
+                '거래처코드',
+                '거 래 처 명 (30자리)',
+                '적요코드',
+                '적  요  명',
+                '금    액',
+                '부서명 (15자리)',
+                '사원명 (15자리)',
+                '현장구분',
+                '현장 코드',
+                '현 장 명 (25자리)',
+                '거래처구분',
+                '등록,계좌,카드번호',
+                '업   태 (20자리)',
+                '종   목 (30자리)',
+                '우편번호',
+                '주  소 (80자리)',
+                '상  세  주  소 (80자리)',
+                '대표자',
+                '매입카드일때카드유형',
+                '신용카드사코드',
+                '카드사용 여부',
+                '프로젝트 코드',
+                '프로젝트명 (30자리)',
+                '증빙불비 원인 (30자리)'
+            ];
+            
+            // 빈 데이터로 초기화
+            csvData = [];
+            
+            renderTable();
+            updateStats();
+            
+            console.log('신용카드매입자료 형식으로 변경 완료');
+        }
+        
+        function processGeneralSlip() {
+            // 일반전표전송 헤더
+            const newHeaders = [
+                '카드종류             (1자리)',
+                '신용카드사명           (30자리이내)',
+                '신용카드번호                   (19자리이내)',
+                '승인일자',
+                '사업자등록번호',
+                '거래처명 (15자리이내)',
+                '거래처유형',
+                '공급가액',
+                '세액',
+                '봉사료',
+                '합계금액',
+                '부가세공제여부',
+                '부가세유형                (2자리)',
+                '계정과목',
+                '품    목(적    요) (30자리이내)',
+                '수 량',
+                '단 가',
+                '대표자                         (15자리이내)',
+                '업 태                       (20자리이내)',
+                '종 목                                   (30자리이내)',
+                '사업장주소                                                                  (80자리이내)',
+                '부서/사원코드               (5자리이내)',
+                '현장코드                        (5자리이내)',
+                '프로젝트코드                   (4자리이내)',
+                '의제.재활용적요번호 (차 변)'
+            ];
+            
+            // 신한카드 데이터가 있는 경우 매핑
+            if (detectedCard === '신한카드' && csvData.length > 0) {
+                console.log('신한카드 데이터를 일반전표전송 형식으로 매핑 중...');
+                
+                const newData = [];
+                
+                for (let i = 0; i < csvData.length; i++) {
+                    const row = csvData[i];
+                    const newRow = {};
+                    
+                    // 매핑 규칙 적용
+                    newRow['카드종류             (1자리)'] = '1';
+                    newRow['신용카드사명           (30자리이내)'] = '신한카드';
+                    newRow['신용카드번호                   (19자리이내)'] = row['이용카드'] || '';
+                    newRow['승인일자'] = row['이용일'] || '';
+                    newRow['사업자등록번호'] = row['사업자번호'] || '';
+                    newRow['거래처명 (15자리이내)'] = row['이용가맹점'] || '';
+                    newRow['거래처유형'] = '';
+                    
+                    // 이용금액 가져오기
+                    const amount = parseFloat((row['이용금액'] || '0').toString().replace(/,/g, '')) || 0;
+                    const taxType = '57';
+                    const isDeductible = taxType === '57';
+                    
+                    // 공급가액 계산 (부가세 공제일 때만)
+                    if (isDeductible) {
+                        newRow['공급가액'] = Math.round(amount / 1.1);
+                    } else {
+                        newRow['공급가액'] = '';
+                    }
+                    
+                    // 세액 계산 (부가세 공제일 때만)
+                    if (isDeductible) {
+                        const supplyAmount = Math.round(amount / 1.1);
+                        newRow['세액'] = amount - supplyAmount;
+                    } else {
+                        newRow['세액'] = '';
+                    }
+                    
+                    newRow['봉사료'] = '0';
+                    newRow['합계금액'] = row['이용금액'] || '';
+                    newRow['부가세공제여부'] = isDeductible ? '공제' : '불공제';
+                    newRow['부가세유형                (2자리)'] = taxType;
+                    newRow['계정과목'] = '';
+                    newRow['품    목(적    요) (30자리이내)'] = '';
+                    newRow['수 량'] = '';
+                    newRow['단 가'] = '';
+                    newRow['대표자                         (15자리이내)'] = '';
+                    newRow['업 태                       (20자리이내)'] = '';
+                    newRow['종 목                                   (30자리이내)'] = '';
+                    newRow['사업장주소                                                                  (80자리이내)'] = '';
+                    newRow['부서/사원코드               (5자리이내)'] = '';
+                    newRow['현장코드                        (5자리이내)'] = '';
+                    newRow['프로젝트코드                   (4자리이내)'] = '';
+                    newRow['의제.재활용적요번호 (차 변)'] = '';
+                    
+                    newData.push(newRow);
+                }
+                
+                headers = newHeaders;
+                csvData = newData;
+                
+                console.log('신한카드 데이터 매핑 완료:', csvData.length, '행');
+            } else {
+                // 신한카드가 아니거나 데이터가 없으면 빈 템플릿
+                headers = newHeaders;
+                csvData = [];
+                console.log('일반전표전송 빈 템플릿으로 변경');
+            }
+            
+            renderTable();
+            updateStats();
         }
     </script>
 </body>
