@@ -691,7 +691,6 @@
             <div class="control-group">
                 <button class="btn btn-warning" id="undoBtn" disabled>↩️ 실행취소</button>
                 <button class="btn btn-warning" id="redoBtn" disabled>↪️ 다시실행</button>
-                <button class="btn btn-danger" id="resetBtn">🗑️ 초기화</button>
             </div>
             <div class="separator"></div>
             <div class="control-group">
@@ -744,7 +743,6 @@
         const creditCardBtn = document.getElementById('creditCardBtn');
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
-        const resetBtn = document.getElementById('resetBtn');
         const copyBtn = document.getElementById('copyBtn');
         const copyNoHeaderBtn = document.getElementById('copyNoHeaderBtn');
         const editMappingBtn = document.getElementById('editMappingBtn');
@@ -1003,7 +1001,6 @@
         });
         undoBtn.addEventListener('click', undo);
         redoBtn.addEventListener('click', redo);
-        resetBtn.addEventListener('click', resetData);
         editMappingBtn.addEventListener('click', showMappingEditModal);
         
         // 패치노트 모달
@@ -1088,29 +1085,6 @@
         function updateUndoRedoButtons() {
             undoBtn.disabled = historyIndex <= 0;
             redoBtn.disabled = historyIndex >= history.length - 1;
-        }
-
-        function resetData() {
-            if (confirm('정말 초기화하시겠습니까? 작업 중인 모든 데이터가 삭제됩니다.')) {
-                csvData = [];
-                headers = [];
-                history = [];
-                historyIndex = -1;
-                currentFormat = '원본';
-                
-                currentFileName.textContent = '파일 없음';
-                fileNameDisplay.classList.remove('active');
-                fileInput.value = '';
-                
-                document.getElementById('dataTable').innerHTML = '';
-                
-                controls.classList.remove('active');
-                tableContainer.classList.remove('active');
-                stats.classList.remove('active');
-                stats.innerHTML = '';
-                
-                updateUndoRedoButtons();
-            }
         }
 
         function processLoadedData(results, sourceName) {
@@ -1660,13 +1634,9 @@
                     }
                 });
                 saveMappingRules();
-                
-                // 설정 유지 목적으로 외부 파일 자동 내보내기 (다운로드) 트리거
-                modal.querySelector('.btn-export').click();
-                
                 modal.remove();
                 const toast = document.createElement('div');
-                toast.textContent = '✅ 매핑 규칙이 저장 및 파일로 자동 다운로드되었습니다.';
+                toast.textContent = '✅ 매핑 규칙이 저장되었습니다.';
                 toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:10px 20px;border-radius:20px;z-index:2000;animation:fadeInOut 2s forwards;';
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 2000);
